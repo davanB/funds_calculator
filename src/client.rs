@@ -1,5 +1,5 @@
+use crate::transaction::{Transaction, TransactionType};
 use std::collections::{HashMap, HashSet};
-use crate::transaction::{TransactionType, Transaction};
 
 #[derive(Debug)]
 struct Funds {
