@@ -3,26 +3,9 @@ use std::collections::{HashMap, HashSet};
 use std::env;
 use std::io;
 
-#[derive(Debug, Deserialize, Clone)]
-#[serde(rename_all = "lowercase")]
-enum TransactionType {
-    Deposit,
-    Withdrawal,
-    Dispute,
-    Resolve,
-    Chargeback,
-}
+mod transaction;
 
-#[derive(Debug, Deserialize, Clone)]
-struct Transaction {
-    #[serde(rename = "type")]
-    tx_type: TransactionType,
-    #[serde(rename = "client")]
-    client_id: u16,
-    #[serde(rename = "tx")]
-    tx_id: u32,
-    amount: Option<f32>,
-}
+use crate::transaction::{TransactionType, Transaction};
 
 #[derive(Debug)]
 struct Funds {
@@ -32,9 +15,9 @@ struct Funds {
 
 impl Funds {
     pub fn new(tx: &Transaction) -> Self {
-        match tx.tx_type {
+        match tx.tx_type() {
             TransactionType::Deposit => Funds {
-                available: tx.amount.unwrap(),
+                available: tx.amount().unwrap(),
                 held: 0f32,
             },
             _ => Funds {
@@ -126,7 +109,7 @@ impl Client {
     fn deposit_amount(&mut self, tx_id: u32, tx: Transaction) -> Result<(), String> {
         self.ensure_future_tx(tx_id)?;
 
-        self.funds.available += tx.amount.unwrap();
+        self.funds.available += tx.amount().unwrap();
         self.add_tx(tx_id, tx);
 
         Ok(())
@@ -135,7 +118,7 @@ impl Client {
     fn withdraw_amount(&mut self, tx_id: u32, tx: Transaction) -> Result<(), String> {
         self.ensure_future_tx(tx_id)?;
 
-        let withdrawal_amount = tx.amount.unwrap();
+        let withdrawal_amount = tx.amount().unwrap();
 
         if self.can_withdraw(withdrawal_amount) {
             self.funds.available -= withdrawal_amount;
@@ -168,7 +151,7 @@ impl Client {
         self.tx_is_not_disputed(tx_id)?;
         let tx = self.get_tx(tx_id)?;
 
-        self.withhold_amount(tx.amount.unwrap());
+        self.withhold_amount(tx.amount().unwrap());
         self.disputed_transactions.insert(tx_id);
 
         Ok(())
@@ -178,7 +161,7 @@ impl Client {
         self.tx_is_disputed(tx_id)?;
         let tx = self.get_tx(tx_id)?;
 
-        self.resolve_amount(tx.amount.unwrap());
+        self.resolve_amount(tx.amount().unwrap());
         self.disputed_transactions.remove(&tx_id);
 
         Ok(())
@@ -188,7 +171,7 @@ impl Client {
         self.tx_is_disputed(tx_id)?;
         let tx = self.get_tx(tx_id)?;
 
-        self.chargeback_amount(tx.amount.unwrap());
+        self.chargeback_amount(tx.amount().unwrap());
         self.locked = true;
         self.disputed_transactions.remove(&tx_id);
 
@@ -197,15 +180,15 @@ impl Client {
 
     fn handle_transaction(&mut self, tx: Transaction) -> Result<(), String> {
         if self.is_locked() {
-            return Err(format!("Account locked, ignoring {}", tx.tx_id));
+            return Err(format!("Account locked, ignoring {}", tx.tx_id()));
         }
 
-        match tx.tx_type {
-            TransactionType::Deposit => self.deposit_amount(tx.tx_id, tx),
-            TransactionType::Withdrawal => self.withdraw_amount(tx.tx_id, tx),
-            TransactionType::Dispute => self.dispute_transaction(tx.tx_id),
-            TransactionType::Resolve => self.resolve_transaction(tx.tx_id),
-            TransactionType::Chargeback => self.chargeback_transaction(tx.tx_id),
+        match tx.tx_type() {
+            TransactionType::Deposit => self.deposit_amount(tx.tx_id(), tx),
+            TransactionType::Withdrawal => self.withdraw_amount(tx.tx_id(), tx),
+            TransactionType::Dispute => self.dispute_transaction(tx.tx_id()),
+            TransactionType::Resolve => self.resolve_transaction(tx.tx_id()),
+            TransactionType::Chargeback => self.chargeback_transaction(tx.tx_id()),
         }
     }
 
@@ -281,13 +264,13 @@ fn process_transactions(transactions: Vec<Transaction>) -> Result<Clients, Strin
 
     for tx in transactions.into_iter() {
         clients
-            .entry(tx.client_id)
+            .entry(tx.client_id())
             .and_modify(|client| {
                 if let Err(error) = client.handle_transaction(tx.clone()) {
                     eprintln!("error handling tx: {}", error)
                 }
             })
-            .or_insert(Client::new(tx.tx_id, tx));
+            .or_insert(Client::new(tx.tx_id(), tx));
     }
 
     Ok(clients)
