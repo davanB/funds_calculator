@@ -23,7 +23,12 @@ pub struct Transaction {
 
 impl Transaction {
     pub fn new(tx_type: TransactionType, tx_id: u32, client_id: u16, amount: Option<f32>) -> Self {
-        Transaction{tx_type, tx_id, client_id, amount}
+        Transaction {
+            tx_type,
+            tx_id,
+            client_id,
+            amount,
+        }
     }
 
     pub fn tx_type(&self) -> &TransactionType {

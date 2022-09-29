@@ -50,12 +50,12 @@ pub fn write_client_funds(clients: Clients) -> Result<(), String> {
 pub fn read_transaction_file() -> Result<String, String> {
     let args: Vec<String> = env::args().skip(1).collect();
 
-    if args.len() == 1 {
-        Ok(args[0].clone())
-    } else {
+    if args.len() < 1 {
         Err(format!(
             "Correct Usage: cargo run -- Records.csv > accounts.csv"
         ))
+    } else {
+        Ok(args[0].clone())
     }
 }
 

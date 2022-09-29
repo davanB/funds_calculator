@@ -55,14 +55,6 @@ impl Client {
         &self.funds
     }
 
-    pub fn transactions(&self) -> &Transactions {
-        &self.transactions
-    }
-
-    pub fn disputed_transactions(&self) -> &DisputedTransactions {
-        &self.disputed_transactions
-    }
-
     pub fn is_locked(&self) -> bool {
         self.locked
     }
@@ -96,6 +88,8 @@ impl Client {
         self.past_tx = tx_id;
     }
 
+    // Transaction IDs (tx) are globally unique, though are also not guaranteed to be ordered.
+    // Ensure txs arrive in chronological order per client
     fn ensure_future_tx(&self, tx_id: u32) -> Result<(), String> {
         if self.past_tx < tx_id {
             Ok(())
@@ -219,17 +213,23 @@ mod tests {
     fn can_calculate_total_funds() {
         let tx_1 = Transaction::new(TransactionType::Deposit, 1, 1, Some(1.5));
         let funds = Funds::new(&tx_1);
-        assert_eq!(funds, Funds {
-            available: 1.5,
-            held: 0.0
-        });
+        assert_eq!(
+            funds,
+            Funds {
+                available: 1.5,
+                held: 0.0
+            }
+        );
 
-        let tx_2 = Transaction::new(TransactionType::Chargeback, 1, 1,None);
+        let tx_2 = Transaction::new(TransactionType::Chargeback, 1, 1, None);
         let funds = Funds::new(&tx_2);
-        assert_eq!(funds, Funds {
-            available: 0.0,
-            held: 0.0
-        });
+        assert_eq!(
+            funds,
+            Funds {
+                available: 0.0,
+                held: 0.0
+            }
+        );
     }
 
     #[test]
@@ -241,10 +241,13 @@ mod tests {
         let mut client = Client::new(1, initial_deposit);
         client.handle_transaction(next_deposit).unwrap();
 
-        assert_eq!(*client.funds(), Funds {
-            available: 3.0,
-            held: 0.0
-        })
+        assert_eq!(
+            *client.funds(),
+            Funds {
+                available: 3.0,
+                held: 0.0
+            }
+        )
     }
 
     #[test]
@@ -256,10 +259,13 @@ mod tests {
         let mut client = Client::new(1, initial_deposit);
         client.handle_transaction(withdrawal).unwrap();
 
-        assert_eq!(*client.funds(), Funds {
-            available: 0.0,
-            held: 0.0
-        })
+        assert_eq!(
+            *client.funds(),
+            Funds {
+                available: 0.0,
+                held: 0.0
+            }
+        )
     }
 
     #[test]
@@ -271,10 +277,13 @@ mod tests {
         let mut client = Client::new(1, initial_deposit);
         client.handle_transaction(dispute).unwrap();
 
-        assert_eq!(*client.funds(), Funds {
-            available: 0.0,
-            held: 1.5
-        })
+        assert_eq!(
+            *client.funds(),
+            Funds {
+                available: 0.0,
+                held: 1.5
+            }
+        )
     }
 
     #[test]
@@ -288,10 +297,13 @@ mod tests {
         client.handle_transaction(dispute).unwrap();
         client.handle_transaction(resolution).unwrap();
 
-        assert_eq!(*client.funds(), Funds {
-            available: 1.5,
-            held: 0.0
-        })
+        assert_eq!(
+            *client.funds(),
+            Funds {
+                available: 1.5,
+                held: 0.0
+            }
+        )
     }
 
     #[test]
@@ -305,10 +317,27 @@ mod tests {
         client.handle_transaction(dispute).unwrap();
         client.handle_transaction(chargeback).unwrap();
 
-        assert_eq!(*client.funds(), Funds {
-            available: 0.0,
-            held: 0.0
-        })
+        assert_eq!(
+            *client.funds(),
+            Funds {
+                available: 0.0,
+                held: 0.0
+            }
+        );
+
+        assert!(client.is_locked())
+    }
+
+    #[test]
+    fn can_get_record() {
+        let client_id = 1;
+        let initial_deposit = Transaction::new(TransactionType::Deposit, 1, client_id, Some(1.5));
+        let client = Client::new(1, initial_deposit);
+
+        assert_eq!(
+            client.get_record(client_id),
+            vec!["1", "1.5000", "0.0000", "1.5000", "false"]
+        )
     }
 
     #[test]
@@ -371,7 +400,8 @@ mod tests {
     fn fails_when_tx_not_in_future() {
         let client_id = 1;
         let tx_id = 1;
-        let initial_deposit = Transaction::new(TransactionType::Deposit, tx_id, client_id, Some(1.5));
+        let initial_deposit =
+            Transaction::new(TransactionType::Deposit, tx_id, client_id, Some(1.5));
         let next_deposit = Transaction::new(TransactionType::Deposit, tx_id, client_id, Some(1.5));
 
         let mut client = Client::new(tx_id, initial_deposit);

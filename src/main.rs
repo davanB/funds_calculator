@@ -1,8 +1,5 @@
 use transactions::{
-    parse_transactions,
-    process_transactions,
-    read_transaction_file,
-    write_client_funds,
+    parse_transactions, process_transactions, read_transaction_file, write_client_funds,
 };
 
 fn main() {
