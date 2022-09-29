@@ -1,8 +1,8 @@
 use crate::transaction::{Transaction, TransactionType};
 use std::collections::{HashMap, HashSet};
 
-#[derive(Debug)]
-struct Funds {
+#[derive(Debug, PartialEq)]
+pub struct Funds {
     available: f32,
     held: f32,
 }
@@ -51,6 +51,22 @@ impl Client {
         }
     }
 
+    pub fn funds(&self) -> &Funds {
+        &self.funds
+    }
+
+    pub fn transactions(&self) -> &Transactions {
+        &self.transactions
+    }
+
+    pub fn disputed_transactions(&self) -> &DisputedTransactions {
+        &self.disputed_transactions
+    }
+
+    pub fn is_locked(&self) -> bool {
+        self.locked
+    }
+
     pub fn handle_transaction(&mut self, tx: Transaction) -> Result<(), String> {
         if self.is_locked() {
             return Err(format!("Account locked, ignoring {}", tx.tx_id()));
@@ -86,10 +102,6 @@ impl Client {
         } else {
             Err(format!("Tx {} is in the past!", tx_id))
         }
-    }
-
-    fn is_locked(&self) -> bool {
-        self.locked
     }
 
     fn should_tx_be_disputed(&self, tx_id: u32, should_be_disputed: bool) -> bool {
@@ -196,5 +208,177 @@ impl Client {
         self.disputed_transactions.remove(&tx_id);
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn can_calculate_total_funds() {
+        let tx_1 = Transaction::new(TransactionType::Deposit, 1, 1, Some(1.5));
+        let funds = Funds::new(&tx_1);
+        assert_eq!(funds, Funds {
+            available: 1.5,
+            held: 0.0
+        });
+
+        let tx_2 = Transaction::new(TransactionType::Chargeback, 1, 1,None);
+        let funds = Funds::new(&tx_2);
+        assert_eq!(funds, Funds {
+            available: 0.0,
+            held: 0.0
+        });
+    }
+
+    #[test]
+    fn can_handle_deposit() {
+        let client_id = 1;
+        let initial_deposit = Transaction::new(TransactionType::Deposit, 1, client_id, Some(1.5));
+        let next_deposit = Transaction::new(TransactionType::Deposit, 2, client_id, Some(1.5));
+
+        let mut client = Client::new(1, initial_deposit);
+        client.handle_transaction(next_deposit).unwrap();
+
+        assert_eq!(*client.funds(), Funds {
+            available: 3.0,
+            held: 0.0
+        })
+    }
+
+    #[test]
+    fn can_handle_withdrawal() {
+        let client_id = 1;
+        let initial_deposit = Transaction::new(TransactionType::Deposit, 1, client_id, Some(1.5));
+        let withdrawal = Transaction::new(TransactionType::Withdrawal, 2, client_id, Some(1.5));
+
+        let mut client = Client::new(1, initial_deposit);
+        client.handle_transaction(withdrawal).unwrap();
+
+        assert_eq!(*client.funds(), Funds {
+            available: 0.0,
+            held: 0.0
+        })
+    }
+
+    #[test]
+    fn can_handle_dispute() {
+        let client_id = 1;
+        let initial_deposit = Transaction::new(TransactionType::Deposit, 1, client_id, Some(1.5));
+        let dispute = Transaction::new(TransactionType::Dispute, 1, client_id, None);
+
+        let mut client = Client::new(1, initial_deposit);
+        client.handle_transaction(dispute).unwrap();
+
+        assert_eq!(*client.funds(), Funds {
+            available: 0.0,
+            held: 1.5
+        })
+    }
+
+    #[test]
+    fn can_handle_resolution() {
+        let client_id = 1;
+        let initial_deposit = Transaction::new(TransactionType::Deposit, 1, client_id, Some(1.5));
+        let dispute = Transaction::new(TransactionType::Dispute, 1, client_id, None);
+        let resolution = Transaction::new(TransactionType::Resolve, 1, client_id, None);
+
+        let mut client = Client::new(1, initial_deposit);
+        client.handle_transaction(dispute).unwrap();
+        client.handle_transaction(resolution).unwrap();
+
+        assert_eq!(*client.funds(), Funds {
+            available: 1.5,
+            held: 0.0
+        })
+    }
+
+    #[test]
+    fn can_handle_chargeback() {
+        let client_id = 1;
+        let initial_deposit = Transaction::new(TransactionType::Deposit, 1, client_id, Some(1.5));
+        let dispute = Transaction::new(TransactionType::Dispute, 1, client_id, None);
+        let chargeback = Transaction::new(TransactionType::Chargeback, 1, client_id, None);
+
+        let mut client = Client::new(1, initial_deposit);
+        client.handle_transaction(dispute).unwrap();
+        client.handle_transaction(chargeback).unwrap();
+
+        assert_eq!(*client.funds(), Funds {
+            available: 0.0,
+            held: 0.0
+        })
+    }
+
+    #[test]
+    fn fails_dispute_when_tx_does_not_exist() {
+        let client_id = 1;
+        let initial_deposit = Transaction::new(TransactionType::Deposit, 1, client_id, Some(1.5));
+        let dispute = Transaction::new(TransactionType::Dispute, 2, client_id, None);
+
+        let mut client = Client::new(1, initial_deposit);
+        if let Err(_error) = client.handle_transaction(dispute) {
+            assert!(true)
+        } else {
+            assert!(false)
+        }
+    }
+
+    #[test]
+    fn fails_resolve_when_tx_does_not_exist() {
+        let client_id = 1;
+        let initial_deposit = Transaction::new(TransactionType::Deposit, 1, client_id, Some(1.5));
+        let resolve = Transaction::new(TransactionType::Resolve, 2, client_id, None);
+
+        let mut client = Client::new(1, initial_deposit);
+        if let Err(_error) = client.handle_transaction(resolve) {
+            assert!(true)
+        } else {
+            assert!(false)
+        }
+    }
+
+    #[test]
+    fn fails_chargeback_when_tx_does_not_exist() {
+        let client_id = 1;
+        let initial_deposit = Transaction::new(TransactionType::Deposit, 1, client_id, Some(1.5));
+        let chargeback = Transaction::new(TransactionType::Chargeback, 2, client_id, None);
+
+        let mut client = Client::new(1, initial_deposit);
+        if let Err(_error) = client.handle_transaction(chargeback) {
+            assert!(true)
+        } else {
+            assert!(false)
+        }
+    }
+
+    #[test]
+    fn fails_withdrawal_on_insufficient_funds() {
+        let client_id = 1;
+        let initial_deposit = Transaction::new(TransactionType::Deposit, 1, client_id, Some(1.5));
+        let withdrawal = Transaction::new(TransactionType::Withdrawal, 2, client_id, Some(2.0));
+
+        let mut client = Client::new(1, initial_deposit);
+        if let Err(_error) = client.handle_transaction(withdrawal) {
+            assert!(true)
+        } else {
+            assert!(false)
+        }
+    }
+
+    #[test]
+    fn fails_when_tx_not_in_future() {
+        let client_id = 1;
+        let tx_id = 1;
+        let initial_deposit = Transaction::new(TransactionType::Deposit, tx_id, client_id, Some(1.5));
+        let next_deposit = Transaction::new(TransactionType::Deposit, tx_id, client_id, Some(1.5));
+
+        let mut client = Client::new(tx_id, initial_deposit);
+        if let Err(_error) = client.handle_transaction(next_deposit) {
+            assert!(true)
+        } else {
+            assert!(false)
+        }
     }
 }
