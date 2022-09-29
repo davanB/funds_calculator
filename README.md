@@ -13,6 +13,11 @@ csv -> deserialize with serde into struct -> convert into list of enums with typ
 
 Although we dont use the amount if incorrectly provided by a partner, its incorrect (and potentially dangerous) to have it populated.
 
+## Safety
+I can make use of the type system more to better handle errors. Currently I just return an `Err(String)` but should be defining custom errors for issues.
+This can allow the type checker to better assist development and provide better error details to another developer.
+This is an area I need to learn more about and improve in.
+
 ## Efficiency
 There was the question if we can stream values, if the csv was very large or if streamed over TCP.
 The main concern is having to keep transactions if a dispute occured.

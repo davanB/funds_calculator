@@ -52,7 +52,7 @@ pub fn read_transaction_file() -> Result<String, String> {
 
     if args.len() < 1 {
         Err(format!(
-            "Correct Usage: cargo run -- Records.csv > accounts.csv"
+            "Correct Usage: cargo run -- /absolute/path/to/Records.csv > accounts.csv"
         ))
     } else {
         Ok(args[0].clone())
